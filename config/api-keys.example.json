@@ -1,0 +1,33 @@
+{
+  "openai": {
+    "apiKey": "sk-your-openai-api-key-here",
+    "model": "gpt-4",
+    "maxTokens": 4000
+  },
+  "stabilityAI": {
+    "apiKey": "your-stability-ai-api-key-here",
+    "model": "stable-diffusion-xl-1024-v1-0"
+  },
+  "elevenLabs": {
+    "apiKey": "your-elevenlabs-api-key-here",
+    "voiceId": "21m00Tcm4TlvDq8ikWAM",
+    "model": "eleven_multilingual_v2"
+  },
+  "runwayML": {
+    "apiKey": "your-runway-ml-api-key-here"
+  },
+  "uploadPost": {
+    "apiKey": "your-upload-post-api-key-here",
+    "username": "your-upload-post-username"
+  },
+  "googleSheets": {
+    "sheetId": "your-google-sheet-id-here",
+    "serviceAccountEmail": "your-service-account@project.iam.gserviceaccount.com"
+  },
+  "fal": {
+    "apiKey": "your-fal-ai-api-key-here"
+  },
+  "klingAI": {
+    "apiKey": "your-kling-ai-api-key-here"
+  }
+}

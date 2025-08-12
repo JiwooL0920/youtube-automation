@@ -1,0 +1,611 @@
+{
+  "name": "Enhanced YouTube Shorts Automation with Multi-Stage Approval",
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 200],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-pending-projects",
+      "name": "Get Pending Projects",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [300, 200],
+      "parameters": {
+        "operation": "readRows",
+        "sheetName": "Projects",
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Pending"
+            }
+          ]
+        },
+        "options": {
+          "range": "A:Z"
+        }
+      }
+    },
+    {
+      "id": "check-pending-exists",
+      "name": "Has Pending Projects?",
+      "type": "n8n-nodes-base.if",
+      "position": [500, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "load-prompts",
+      "name": "Load Prompt Templates",
+      "type": "n8n-nodes-base.readFile",
+      "position": [700, 200],
+      "parameters": {
+        "filePath": "/Users/jiwoolee/Project/youtube-automation/templates/prompts.json",
+        "dataPropertyName": "prompts"
+      }
+    },
+    {
+      "id": "generate-concept",
+      "name": "Generate Video Concept",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [900, 200],
+      "parameters": {
+        "modelId": "gpt-4",
+        "temperature": 0.8,
+        "maxTokens": 1500,
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $('load-prompts').item.json.prompts.concept_generation.system }}"
+            },
+            {
+              "role": "user",
+              "content": "Create a YouTube Shorts concept for: {{ $json.Idea }}\n\nTarget audience: General educational content viewers\n\nReturn detailed JSON with hook, structure, cta, audience, visuals, timing, and educational_value fields."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "update-concept-generated",
+      "name": "Update: Concept Generated",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1100, 200],
+      "parameters": {
+        "operation": "update",
+        "sheetName": "Projects",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Concept Review",
+            "Concept": "={{ $json.message.content }}",
+            "Updated": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": ["ID"]
+        }
+      }
+    },
+    {
+      "id": "get-concept-reviews",
+      "name": "Get Concept Reviews",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [300, 400],
+      "parameters": {
+        "operation": "readRows",
+        "sheetName": "Projects",
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Concept Review"
+            },
+            {
+              "lookupColumn": "ConceptApproved",
+              "lookupValue": "Yes"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "generate-script",
+      "name": "Generate Script & Storyboard",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [500, 400],
+      "parameters": {
+        "modelId": "gpt-4",
+        "temperature": 0.7,
+        "maxTokens": 2000,
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $('load-prompts').item.json.prompts.script_generation.system }}"
+            },
+            {
+              "role": "user",
+              "content": "Create detailed script for:\n\nConcept: {{ $json.Concept }}\nUser Feedback: {{ $json.ConceptFeedback || 'None' }}\n\nReturn JSON with scenes array containing scene_number, duration, voiceover, visual_description, text_overlay, transition, timing_notes."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "update-script-generated",
+      "name": "Update: Script Generated",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [700, 400],
+      "parameters": {
+        "operation": "update",
+        "sheetName": "Projects",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Script Review",
+            "Script": "={{ $json.message.content }}",
+            "Updated": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": ["ID"]
+        }
+      }
+    },
+    {
+      "id": "get-script-approved",
+      "name": "Get Script Approved",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [300, 600],
+      "parameters": {
+        "operation": "readRows",
+        "sheetName": "Projects",
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Script Review"
+            },
+            {
+              "lookupColumn": "ScriptApproved",
+              "lookupValue": "Yes"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parse-script",
+      "name": "Parse Script Scenes",
+      "type": "n8n-nodes-base.code",
+      "position": [500, 600],
+      "parameters": {
+        "jsCode": "const script = JSON.parse($json.Script);\nconst scenes = script.scenes || [];\n\nreturn scenes.map((scene, index) => ({\n  json: {\n    ...scene,\n    project_id: $json.ID,\n    scene_index: index,\n    total_scenes: scenes.length,\n    style_notes: script.style_notes,\n    music_suggestion: script.music_suggestion\n  }\n}));"
+      }
+    },
+    {
+      "id": "generate-scene-image",
+      "name": "Generate Scene Images",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [700, 600],
+      "parameters": {
+        "url": "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.stabilityAI.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"text_prompts\": [\n    {\n      \"text\": \"{{ $json.visual_description }}, 3D colorful papercut art style, multi-layered paper sculpture, dramatic shadows, volumetric clouds, minimalist background, professional craft photography, square 1080x1080\"\n    }\n  ],\n  \"cfg_scale\": 7,\n  \"height\": 1024,\n  \"width\": 1024,\n  \"samples\": 1,\n  \"steps\": 30\n}"
+      }
+    },
+    {
+      "id": "save-image-urls",
+      "name": "Save Image URLs",
+      "type": "n8n-nodes-base.set",
+      "position": [900, 600],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "image_url",
+              "name": "image_url",
+              "type": "string",
+              "value": "={{ $json.artifacts[0].base64 ? 'data:image/png;base64,' + $json.artifacts[0].base64 : '' }}"
+            },
+            {
+              "id": "scene_data",
+              "name": "scene_data",
+              "type": "object",
+              "value": "={{ $('parse-script').item.json }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "generate-voiceover",
+      "name": "Generate Voiceover",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1100, 600],
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/{{ $credentials.elevenLabs.voiceId }}",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "{{ $credentials.elevenLabs.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"text\": \"{{ $json.scene_data.voiceover }}\",\n  \"model_id\": \"eleven_multilingual_v2\",\n  \"voice_settings\": {\n    \"stability\": 0.5,\n    \"similarity_boost\": 0.8,\n    \"style\": 0.2,\n    \"use_speaker_boost\": true\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "create-video-clip",
+      "name": "Create Video Clip",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1300, 600],
+      "parameters": {
+        "url": "https://queue.fal.run/fal-ai/stable-video-diffusion",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key {{ $credentials.fal.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"image_url\": \"{{ $json.image_url }}\",\n  \"motion_bucket_id\": 127,\n  \"cond_aug\": 0.02,\n  \"steps\": 25,\n  \"fps\": 6\n}"
+      }
+    },
+    {
+      "id": "wait-for-video",
+      "name": "Wait for Video Generation",
+      "type": "n8n-nodes-base.wait",
+      "position": [1500, 600],
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "get-video-result",
+      "name": "Get Video Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1700, 600],
+      "parameters": {
+        "url": "https://queue.fal.run/fal-ai/stable-video-diffusion/requests/{{ $json.request_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key {{ $credentials.fal.apiKey }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "collect-all-scenes",
+      "name": "Collect All Scene Assets",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [300, 800],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      }
+    },
+    {
+      "id": "assemble-final-video",
+      "name": "Assemble Final Video",
+      "type": "n8n-nodes-base.code",
+      "position": [500, 800],
+      "parameters": {
+        "jsCode": "// Video assembly logic\nconst scenes = $input.all();\nconst projectId = scenes[0].json.project_id;\n\n// Sort scenes by scene_number\nscenes.sort((a, b) => a.json.scene_data.scene_number - b.json.scene_data.scene_number);\n\nconst videoAssembly = {\n  project_id: projectId,\n  scenes: scenes.map(scene => ({\n    scene_number: scene.json.scene_data.scene_number,\n    video_url: scene.json.video?.url || '',\n    audio_data: scene.json.audio_data || '',\n    duration: scene.json.scene_data.duration,\n    text_overlay: scene.json.scene_data.text_overlay,\n    transition: scene.json.scene_data.transition\n  })),\n  total_duration: scenes.reduce((sum, scene) => sum + (scene.json.scene_data.duration || 0), 0),\n  assembly_timestamp: new Date().toISOString()\n};\n\nreturn [{ json: videoAssembly }];"
+      }
+    },
+    {
+      "id": "generate-metadata",
+      "name": "Generate Title & Description",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [700, 800],
+      "parameters": {
+        "modelId": "gpt-4",
+        "temperature": 0.7,
+        "maxTokens": 800,
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a YouTube SEO expert. Create engaging titles and descriptions for YouTube Shorts."
+            },
+            {
+              "role": "user",
+              "content": "Create title and description for this video:\n\nProject: {{ $('get-script-approved').item.json.Idea }}\nConcept: {{ $('get-script-approved').item.json.Concept }}\nTotal Duration: {{ $json.total_duration }} seconds\n\nReturn JSON with 'title' (under 60 chars) and 'description' (under 1000 chars) fields."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "update-final-review",
+      "name": "Update: Ready for Final Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [900, 800],
+      "parameters": {
+        "operation": "update",
+        "sheetName": "Projects",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Final Review",
+            "VideoURL": "{{ $('assemble-final-video').item.json.final_video_url || 'Processing...' }}",
+            "Title": "={{ JSON.parse($json.message.content).title }}",
+            "Description": "={{ JSON.parse($json.message.content).description }}",
+            "Updated": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": ["ID"]
+        }
+      }
+    },
+    {
+      "id": "get-final-approved",
+      "name": "Get Final Approved",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [300, 1000],
+      "parameters": {
+        "operation": "readRows",
+        "sheetName": "Projects",
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Final Review"
+            },
+            {
+              "lookupColumn": "FinalApproved",
+              "lookupValue": "Yes"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "upload-to-youtube",
+      "name": "Upload to YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 1000],
+      "parameters": {
+        "url": "https://api.upload-post.com/api/upload",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Apikey {{ $credentials.uploadPost.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "={{ $json.Title }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.Description }}"
+            },
+            {
+              "name": "user",
+              "value": "{{ $credentials.uploadPost.username }}"
+            },
+            {
+              "name": "platform[]",
+              "value": "youtube"
+            },
+            {
+              "name": "video",
+              "value": "={{ $json.VideoURL }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "update-published",
+      "name": "Update: Published",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [700, 1000],
+      "parameters": {
+        "operation": "update",
+        "sheetName": "Projects",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Published",
+            "YouTubeURL": "={{ $json.results?.youtube?.video_url || 'Upload in progress...' }}",
+            "Updated": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": ["ID"]
+        }
+      }
+    },
+    {
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.set",
+      "position": [1000, 1200],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error_status",
+              "name": "error_status",
+              "type": "string",
+              "value": "Error"
+            },
+            {
+              "id": "error_message",
+              "name": "error_message",
+              "type": "string",
+              "value": "={{ $json.error?.message || 'Unknown error occurred' }}"
+            },
+            {
+              "id": "error_timestamp",
+              "name": "error_timestamp",
+              "type": "string",
+              "value": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "schedule-trigger": {
+      "main": [["get-pending-projects", "get-concept-reviews", "get-script-approved", "get-final-approved"]]
+    },
+    "get-pending-projects": {
+      "main": [["check-pending-exists"]]
+    },
+    "check-pending-exists": {
+      "main": [["load-prompts"], []]
+    },
+    "load-prompts": {
+      "main": [["generate-concept"]]
+    },
+    "generate-concept": {
+      "main": [["update-concept-generated"]]
+    },
+    "get-concept-reviews": {
+      "main": [["generate-script"]]
+    },
+    "generate-script": {
+      "main": [["update-script-generated"]]
+    },
+    "get-script-approved": {
+      "main": [["parse-script"]]
+    },
+    "parse-script": {
+      "main": [["generate-scene-image"]]
+    },
+    "generate-scene-image": {
+      "main": [["save-image-urls"]]
+    },
+    "save-image-urls": {
+      "main": [["generate-voiceover"]]
+    },
+    "generate-voiceover": {
+      "main": [["create-video-clip"]]
+    },
+    "create-video-clip": {
+      "main": [["wait-for-video"]]
+    },
+    "wait-for-video": {
+      "main": [["get-video-result"]]
+    },
+    "get-video-result": {
+      "main": [["collect-all-scenes"]]
+    },
+    "collect-all-scenes": {
+      "main": [["assemble-final-video"]]
+    },
+    "assemble-final-video": {
+      "main": [["generate-metadata"]]
+    },
+    "generate-metadata": {
+      "main": [["update-final-review"]]
+    },
+    "get-final-approved": {
+      "main": [["upload-to-youtube"]]
+    },
+    "upload-to-youtube": {
+      "main": [["update-published"]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler"
+  },
+  "staticData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

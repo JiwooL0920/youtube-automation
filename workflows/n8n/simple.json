@@ -1,0 +1,162 @@
+{
+  "name": "simple",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        540,
+        -120
+      ],
+      "id": "d26d23b3-6f00-42b6-b74e-1bb03e77d9ab",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4",
+          "mode": "list",
+          "cachedResultName": "GPT-4"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Create a YouTube Shorts concept about: {{ $json.video_idea }}\\n\\nTarget audience: {{ $json.target_audience }}\\n\\nWrite a detailed concept that includes:\\n- Hook (opening line)\\n- Structure (main sections)\\n- Call to action\\n- Visual elements\\n- Educational value\\n\\nFormat your response as a clear concept description\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        960,
+        -120
+      ],
+      "id": "1d7df0c7-baf6-458d-a06f-57e52c8b98e1",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "wVJvDIuWZYYtgOgq",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "819755d8-cac4-4681-adfe-240e10709fed",
+              "name": "video_idea",
+              "value": "3 food photography tips in under 60 seconds",
+              "type": "string"
+            },
+            {
+              "id": "5fe24b08-19a0-4951-a48a-c4a84b588eb8",
+              "name": "target_audience",
+              "value": "food and photography enthusiasts who are just learning how to cook and take picture of their food",
+              "type": "string"
+            },
+            {
+              "id": "fbbdb7e5-df4e-4c76-a3c4-f12a4a70cb1e",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        760,
+        -120
+      ],
+      "id": "969ae092-d6d2-455b-9356-0a9aef7c36f5",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4",
+          "mode": "list",
+          "cachedResultName": "GPT-4"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Based on this concept: {{ $json.message.content }}\\n\\nWrite a 60-second YouTube Shorts script about food photography.\\n\\nInclude:\\n- Scene-by-scene breakdown\\n- Voiceover text for each scene\\n- Visual descriptions\\n- Duration for each scene (total should be 60 seconds)\\n\\nMake it engaging and educational."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1320,
+        -120
+      ],
+      "id": "292c3af2-7aa6-4ebc-a80d-523eb7fb7193",
+      "name": "Message a model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "wVJvDIuWZYYtgOgq",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3c773322-bfe9-415b-ad43-a92c0c0942f6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "05129d2bdd4cf6664cb10b1bd5cf77221e5d43d51b8c2d2cad46e245a607a7d0"
+  },
+  "id": "ImNipwapjEkNWQPQ",
+  "tags": []
+}
